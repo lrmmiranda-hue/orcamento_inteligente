@@ -1,0 +1,6 @@
+{
+  "name": "Gestão e Rastreabilidade de Usinagem",
+  "description": "Sistema integrado para ordens de produção, controle de estoque do cliente, rastreabilidade de materiais, monitoramento remoto de CNC, conexão Siemens NX e orçamentos automáticos por IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

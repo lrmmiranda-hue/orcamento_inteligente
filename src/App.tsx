@@ -469,8 +469,8 @@ export default function App() {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-cyan-400"></div>
           
           <div className="flex flex-col items-center mb-8">
-            <div className="w-32 h-16 rounded overflow-hidden shadow-xl mb-4 bg-white/5 p-2 flex items-center justify-center">
-              <img src={logologinImg} alt="Login Logo" className="max-w-full max-h-full object-contain" />
+            <div className="w-56 h-28 mb-4 flex items-center justify-center">
+              <img src={logologinImg} alt="Login Logo" className="w-full h-full object-contain" />
             </div>
             <p className="text-slate-400 text-xs font-mono mt-1">SISTEMA INTEGRADO DE GESTÃO</p>
           </div>
@@ -504,9 +504,11 @@ export default function App() {
               <p className="text-red-400 text-xs bg-red-950/30 p-3 rounded-lg border border-red-900/50">{loginError}</p>
             )}
 
-            <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold tracking-wider transition shadow-lg shadow-blue-900/20">
-              ACESSAR SISTEMA
-            </button>
+            <div className="flex justify-center mt-2">
+              <button type="submit" className="w-2/3 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold tracking-wider transition shadow-lg shadow-blue-900/20">
+                ACESSAR SISTEMA
+              </button>
+            </div>
           </form>
           
           <div className="mt-8 pt-6 border-t border-slate-800 text-center">

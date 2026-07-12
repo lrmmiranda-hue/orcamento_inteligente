@@ -13,7 +13,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Clock,
-  User,
+  User as UserIcon,
   MapPin,
   RefreshCw,
   FileCode,
@@ -32,17 +32,21 @@ import {
   UploadCloud,
   Bot,
   MessageSquare,
-  Printer
+  Printer,
+  Cloud,
+  Pencil
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { MaterialItem, ProductionOrder, CncMachine, Invoice, AiQuoteResponse } from "./types";
+import { MaterialItem, ProductionOrder, CncMachine, Invoice, AiQuoteResponse, User } from "./types";
 import SiemensNxSync from "./components/SiemensNxSync";
 import Sketchpad from "./components/Sketchpad";
-
+import logoImg from "./assets/logo3.jpg";
+import { collection, onSnapshot, addDoc, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { db } from "./lib/firebase";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "orders" | "ai-quote" | "siemens-nx" | "finance">("dashboard");
-  const [currentTheme, setCurrentTheme] = useState<"slate-dark" | "steel-light" | "amber-crt" | "operator-blue">("slate-dark");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "inventory" | "orders" | "ai-quote" | "siemens-nx" | "finance" | "settings">("dashboard");
+  const [currentTheme, setCurrentTheme] = useState<"slate-dark" | "steel-light" | "amber-crt" | "operator-blue">("steel-light");
   
   // Real-time states
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
@@ -51,9 +55,36 @@ export default function App() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Settings & Users state
+  const [users, setUsers] = useState<User[]>([]);
+
+  useEffect(() => {
+    const q = collection(db, "users");
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const loadedUsers: User[] = [];
+      snapshot.forEach((docSnap) => {
+        loadedUsers.push({ id: docSnap.id, ...docSnap.data() } as User);
+      });
+      setUsers(loadedUsers);
+    });
+    return () => unsubscribe();
+  }, []);
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [inventorySearch, setInventorySearch] = useState("");
+
+  // User Management Modal State
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [isSubmittingUser, setIsSubmittingUser] = useState(false);
+  const [cloudConnected, setCloudConnected] = useState(false);
+  const [cloudCreds, setCloudCreds] = useState({ url: "", user: "", pass: "" });
+  const [newUser, setNewUser] = useState<Omit<User, "id">>({
+    name: "",
+    email: "",
+    role: "Operador CNC",
+    permissions: ["dashboard"]
+  });
 
   // Material Register Form State
   const [showMaterialForm, setShowMaterialForm] = useState(false);
@@ -87,10 +118,12 @@ export default function App() {
   const [stageProgressNotes, setStageProgressNotes] = useState("");
 
   // AI Quote State
+  const [quoteMode, setQuoteMode] = useState<"select" | "manual" | "ai">("select");
   const [aiQuoteParams, setAiQuoteParams] = useState({
     partName: "Flange do Distribuidor de Alta Pressão",
     materialType: "Aço Inox 316L",
-    dimensions: "Ø150mm x 80mm",
+    dimensionLength: "150",
+    dimensionWidth: "80",
     tolerance: "± 0.005 mm",
     roughness: "Ra 0.4 µm",
     features: "Furação concêntrica de 8 canais, rasgo de chaveta interno e alívio de peso helicoidal.",
@@ -281,6 +314,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...aiQuoteParams,
+          dimensions: `${aiQuoteParams.dimensionLength}mm x ${aiQuoteParams.dimensionWidth}mm`,
           image: activeImage
         })
       });
@@ -415,18 +449,22 @@ export default function App() {
             color: #0f172a !important;
           }
           nav#nav-rail {
-            background-color: #f1f5f9 !important;
+            background-color: #ffffff !important;
             border-right: 1px solid #cbd5e1 !important;
           }
           nav#nav-rail p {
-            color: #475569 !important;
+            color: #64748b !important;
           }
           nav#nav-rail button {
             color: #475569 !important;
           }
           nav#nav-rail button:hover {
-            background-color: #e2e8f0 !important;
+            background-color: #f1f5f9 !important;
             color: #0f172a !important;
+          }
+          /* Global Hover Overrides for Light Theme */
+          .hover\\:bg-slate-900\\/50:hover, .hover\\:bg-slate-900:hover, .hover\\:bg-slate-800:hover, .hover\\:bg-slate-800\\/50:hover, .hover\\:bg-slate-700:hover {
+            background-color: #f1f5f9 !important;
           }
           nav#nav-rail button[class*="bg-blue-600/10"], nav#nav-rail button[class*="bg-gradient-to-r"] {
             background-color: #eff6ff !important;
@@ -697,74 +735,39 @@ export default function App() {
         }
       `}</style>
 
-      {/* High-Tech Industrial Header */}
-      <header id="app-header" className="bg-slate-900 border-b border-slate-800/80 px-6 py-4 flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-30 shadow-md">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl text-white shadow-lg border border-blue-400/20">
-            <Cpu className="w-6 h-6 animate-spin-slow" />
-          </div>
-          <div>
-            <span className="text-[10px] tracking-widest text-blue-500 font-mono font-bold uppercase block">Usinagem de Precisão 4.0</span>
-            <h1 className="text-lg font-extrabold text-white tracking-tight flex items-center gap-2">
-              METAL-IA CONTROLE INDUSTRIAL
-            </h1>
-          </div>
-        </div>
+      {/* Full Width Logo Banner with Modern Glassmorphism Overlay */}
+      <div className="w-full relative shadow-md border-b border-slate-200 bg-white overflow-hidden">
+        {/* Usamos object-cover pois a imagem agora tem a proporção ideal (1920x300) e deixamos com cores mais vivas */}
+        <img src={logoImg} alt="WCF Usinagem Logo" className="w-full h-24 md:h-32 lg:h-48 object-cover object-center mix-blend-multiply opacity-85 contrast-100 brightness-100" />
+        
+        {/* Subtle gradient at the bottom for better contrast of the glass buttons */}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-900/10 to-transparent h-24 pointer-events-none" />
 
-        {/* Real-time status ticker & Layout Selector */}
-        <div className="hidden lg:flex items-center gap-6 text-xs text-slate-400 font-mono bg-slate-950/80 px-4 py-2 rounded-lg border border-slate-800">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Rede CNC: <strong className="text-slate-200">Online</strong></span>
+        {/* Overlay Actions */}
+        <div className="absolute bottom-4 right-4 md:bottom-6 md:right-8 flex flex-col sm:flex-row items-end sm:items-center gap-3 md:gap-4">
+          {/* Real-time status */}
+          <div className="flex items-center gap-2 text-xs font-mono bg-white/70 backdrop-blur-md text-slate-700 px-4 py-2.5 rounded-xl border border-white/60 shadow-[0_4px_16px_rgba(0,0,0,0.05)]">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+            <span className="font-semibold tracking-wide">Rede CNC: <strong className="text-emerald-700 font-bold">Online</strong></span>
           </div>
-          <div className="w-px h-4 bg-slate-800" />
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-400">Layout:</span>
-            <select
-              value={currentTheme}
-              onChange={(e) => setCurrentTheme(e.target.value as any)}
-              className="bg-slate-900 text-slate-200 text-[11px] font-sans font-bold border border-slate-700 rounded px-2 py-0.5 focus:outline-none focus:border-blue-500 cursor-pointer"
-            >
-              <option value="slate-dark">Slate Escuro (Padrão)</option>
-              <option value="steel-light">Steel Claro (Laboratório)</option>
-              <option value="amber-crt">Amber CRT (Retro Painel)</option>
-              <option value="operator-blue">Navy Operator (Industrial)</option>
-            </select>
-          </div>
-          <div className="w-px h-4 bg-slate-800" />
-          <div>
-            <span>Orçamentos: <strong className="text-blue-400 font-bold">Powered by Gemini 3.5</strong></span>
-          </div>
-        </div>
 
-        {/* Global actions */}
-        <div className="flex items-center gap-2.5">
-          <select
-            value={currentTheme}
-            onChange={(e) => setCurrentTheme(e.target.value as any)}
-            className="bg-slate-900 text-slate-200 text-xs font-semibold border border-slate-800 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer lg:hidden"
-          >
-            <option value="slate-dark">Slate Escuro</option>
-            <option value="steel-light">Steel Claro</option>
-            <option value="amber-crt">Amber CRT</option>
-            <option value="operator-blue">Navy Operator</option>
-          </select>
           <button
             onClick={() => setShowMaterialForm(true)}
-            className="px-3.5 py-1.5 rounded-lg border border-slate-800 bg-slate-950 text-xs font-semibold text-slate-200 hover:border-slate-700 hover:text-white transition cursor-pointer flex items-center gap-1.5"
+            className="px-5 py-2.5 rounded-xl border border-white/60 bg-white/70 backdrop-blur-md text-sm font-bold text-slate-700 hover:bg-white/90 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center gap-2 shadow-[0_4px_16px_rgba(0,0,0,0.05)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.1)]"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4 text-blue-600" />
             Receber Matéria-Prima
           </button>
+          
           <button
             onClick={() => setShowOpForm(true)}
-            className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-xs font-semibold text-white hover:from-blue-500 hover:to-indigo-500 transition shadow-md shadow-blue-500/10 cursor-pointer flex items-center gap-1.5"
+            className="px-5 py-2.5 rounded-xl bg-blue-600/90 backdrop-blur-md text-sm font-bold text-white hover:bg-blue-600 hover:-translate-y-0.5 transition-all shadow-[0_4px_16px_rgba(37,99,235,0.2)] hover:shadow-[0_8px_24px_rgba(37,99,235,0.3)] border border-blue-500/50 cursor-pointer flex items-center gap-2"
           >
-            <Wrench className="w-3.5 h-3.5" />
+            <Wrench className="w-4 h-4" />
             Gerar OP sob-medida
           </button>
         </div>
-      </header>
+      </div>
 
       {/* Main Layout Area */}
       <div className="flex-1 flex flex-col md:flex-row">
@@ -813,7 +816,7 @@ export default function App() {
             }`}
           >
             <Sparkles className="w-4 h-4 text-indigo-400" />
-            Robô Orçamentista IA
+            Orçamentos
           </button>
           <button
             onClick={() => setActiveTab("siemens-nx")}
@@ -836,6 +839,18 @@ export default function App() {
           >
             <Coins className="w-4 h-4" />
             Notas Fiscais (NF-e)
+          </button>
+
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`w-full text-left px-3 py-2.5 rounded-lg text-xs font-semibold flex items-center gap-2.5 transition cursor-pointer ${
+              activeTab === "settings"
+                ? "bg-blue-600/10 text-blue-400 border-l-2 border-blue-500"
+                : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+            }`}
+          >
+            <UserIcon className="w-4 h-4" />
+            Configurações
           </button>
 
           <div className="pt-6 mt-6 border-t border-slate-800/80">
@@ -1269,15 +1284,114 @@ export default function App() {
                 </motion.div>
               )}
 
-              {/* TAB 4: AI INTELLIGENT QUOTE GENERATOR */}
+              {/* TAB 4: QUOTES GENERATOR (FULL SCREEN) */}
               {activeTab === "ai-quote" && (
-                <motion.div
-                  key="ai-quote"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="grid grid-cols-1 lg:grid-cols-3 gap-8"
-                >
+                <div className="fixed inset-0 z-50 bg-slate-950 overflow-y-auto">
+                  <div className="sticky top-0 z-20 bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shadow-md">
+                    <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-indigo-400" />
+                      Módulo de Orçamentos
+                    </h2>
+                    <button 
+                      onClick={() => { setActiveTab("dashboard"); setQuoteMode("select"); }}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded font-semibold transition cursor-pointer"
+                    >
+                      Voltar ao Painel
+                    </button>
+                  </div>
+
+                  <div className="p-6 max-w-7xl mx-auto">
+                    {quoteMode === "select" && (
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="flex flex-col items-center justify-center min-h-[70vh] space-y-8"
+                      >
+                        <div className="text-center space-y-2">
+                          <h3 className="text-3xl font-extrabold text-white">Escolha o formato do Orçamento</h3>
+                          <p className="text-slate-400">Como você deseja gerar a proposta comercial hoje?</p>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+                          <button 
+                            onClick={() => setQuoteMode("manual")}
+                            className="flex flex-col items-center p-10 bg-slate-900 border-2 border-slate-800 hover:border-blue-500 rounded-2xl transition cursor-pointer group"
+                          >
+                            <FileText className="w-16 h-16 text-slate-500 group-hover:text-blue-400 mb-4 transition" />
+                            <h4 className="text-xl font-bold text-slate-200 mb-2">Orçamento Manual</h4>
+                            <p className="text-sm text-slate-400 text-center">Preencha tempos de máquina, custos e taxas manualmente. Ideal para processos clássicos.</p>
+                          </button>
+
+                          <button 
+                            onClick={() => setQuoteMode("ai")}
+                            className="flex flex-col items-center p-10 bg-slate-900 border-2 border-slate-800 hover:border-indigo-500 rounded-2xl transition cursor-pointer group relative overflow-hidden"
+                          >
+                            <div className="absolute inset-0 bg-indigo-500/5 group-hover:bg-indigo-500/10 transition" />
+                            <Bot className="w-16 h-16 text-slate-500 group-hover:text-indigo-400 mb-4 transition relative z-10" />
+                            <h4 className="text-xl font-bold text-slate-200 mb-2 relative z-10">Robô Orçamentista IA</h4>
+                            <p className="text-sm text-slate-400 text-center relative z-10">Deixe a inteligência artificial calcular tudo com base no material, tolerância e algoritmos.</p>
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+
+                    {quoteMode === "manual" && (
+                      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-lg max-w-4xl mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                           <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                             <FileText className="w-5 h-5 text-blue-400" />
+                             Orçamento Manual Clássico
+                           </h3>
+                           <button onClick={() => setQuoteMode("select")} className="text-sm text-slate-400 hover:text-white underline cursor-pointer">Voltar às opções</button>
+                        </div>
+                        
+                        <form className="space-y-4">
+                           <div className="grid grid-cols-2 gap-4">
+                             <div>
+                               <label className="block text-xs text-slate-400 mb-1">Cliente</label>
+                               <input type="text" className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white" />
+                             </div>
+                             <div>
+                               <label className="block text-xs text-slate-400 mb-1">Peça</label>
+                               <input type="text" className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white" />
+                             </div>
+                             <div>
+                               <label className="block text-xs text-slate-400 mb-1">Tempo de Setup (Horas)</label>
+                               <input type="number" className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white font-mono" />
+                             </div>
+                             <div>
+                               <label className="block text-xs text-slate-400 mb-1">Tempo de Usinagem CNC (Horas)</label>
+                               <input type="number" className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white font-mono" />
+                             </div>
+                             <div>
+                               <label className="block text-xs text-slate-400 mb-1">Valor Hora/Máquina (R$)</label>
+                               <input type="number" className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white font-mono" />
+                             </div>
+                             <div>
+                               <label className="block text-xs text-slate-400 mb-1">Custo de Material (R$)</label>
+                               <input type="number" className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-white font-mono" />
+                             </div>
+                           </div>
+                           <div className="pt-4 flex justify-end">
+                             <button type="button" className="px-5 py-2 bg-blue-600 text-white rounded font-bold cursor-pointer">
+                               Calcular Proposta Manual
+                             </button>
+                           </div>
+                        </form>
+                      </motion.div>
+                    )}
+
+                    {quoteMode === "ai" && (
+                      <motion.div
+                        key="ai-quote-content"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+                      >
+                        <div className="lg:col-span-3 flex justify-between items-center mb-[-1rem]">
+                          <span className="text-xs font-mono text-indigo-400">MODO ATIVO: INTELIGÊNCIA ARTIFICIAL</span>
+                          <button onClick={() => setQuoteMode("select")} className="text-sm text-slate-400 hover:text-white underline cursor-pointer">Trocar para Orçamento Manual</button>
+                        </div>
                   {/* Quote Form Panel */}
                   <div className="lg:col-span-1 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-5">
                     <div>
@@ -1465,20 +1579,31 @@ export default function App() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-slate-400 mb-1 font-semibold">Dimensões Brutas</label>
+                          <label className="block text-slate-400 mb-1 text-sm font-semibold">Comprimento (mm)</label>
                           <input
-                            type="text"
-                            value={aiQuoteParams.dimensions}
-                            onChange={(e) => setAiQuoteParams({ ...aiQuoteParams, dimensions: e.target.value })}
+                            type="number"
+                            value={aiQuoteParams.dimensionLength}
+                            onChange={(e) => setAiQuoteParams({ ...aiQuoteParams, dimensionLength: e.target.value })}
                             className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 font-mono"
-                            placeholder="Ex: Ø80mm x 150mm"
+                            placeholder="Ex: 150"
                             required
                           />
                         </div>
                         <div>
-                          <label className="block text-slate-400 mb-1 font-semibold">Quantidade de Peças</label>
+                          <label className="block text-slate-400 mb-1 text-sm font-semibold">Largura (mm)</label>
+                          <input
+                            type="number"
+                            value={aiQuoteParams.dimensionWidth}
+                            onChange={(e) => setAiQuoteParams({ ...aiQuoteParams, dimensionWidth: e.target.value })}
+                            className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 font-mono"
+                            placeholder="Ex: 80"
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-slate-400 mb-1 text-sm font-semibold">Quantidade</label>
                           <input
                             type="number"
                             value={aiQuoteParams.quantity}
@@ -1854,6 +1979,9 @@ export default function App() {
                   </div>
                 </motion.div>
               )}
+            </div>
+          </div>
+        )}
 
               {/* TAB 5: SIEMENS NX CONNECTION */}
               {activeTab === "siemens-nx" && (
@@ -1979,6 +2107,101 @@ export default function App() {
                   </div>
                 </motion.div>
               )}
+              {/* TAB 7: SETTINGS & RBAC */}
+              {activeTab === "settings" && (
+                <motion.div
+                  key="settings"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div>
+                      <h2 className="text-base font-bold text-white flex items-center gap-2">
+                        <UserIcon className="w-5 h-5 text-slate-400" />
+                        Configurações e Gestão de Usuários
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1">Gerencie os acessos ao sistema e controle permissões (RBAC).</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setEditingUserId(null);
+                        setNewUser({ name: "", email: "", role: "Operador CNC", permissions: ["dashboard"] });
+                        setShowUserForm(true);
+                      }}
+                      className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition cursor-pointer flex items-center gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Criar Conta
+                    </button>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+                    <div className="bg-slate-950 px-5 py-3 border-b border-slate-800">
+                      <h3 className="text-xs font-bold font-mono text-slate-200 tracking-wider">CONTAS CADASTRADAS NO SISTEMA</h3>
+                    </div>
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-950 text-slate-400 font-mono">
+                        <tr>
+                          <th className="px-5 py-3 border-b border-slate-800">NOME DO USUÁRIO</th>
+                          <th className="px-5 py-3 border-b border-slate-800">E-MAIL</th>
+                          <th className="px-5 py-3 border-b border-slate-800">FUNÇÃO (ROLE)</th>
+                          <th className="px-5 py-3 border-b border-slate-800">PERMISSÕES</th>
+                          <th className="px-5 py-3 border-b border-slate-800 text-right">AÇÕES</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/80">
+                        {users.map(u => (
+                          <tr key={u.id} className="hover:bg-slate-800/50 transition">
+                            <td className="px-5 py-3 font-semibold text-white">{u.name}</td>
+                            <td className="px-5 py-3 text-slate-400">{u.email}</td>
+                            <td className="px-5 py-3">
+                              <span className="text-slate-300 font-mono">
+                                {u.role}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3 text-[10px] text-slate-500 font-mono">
+                              {u.permissions.join(", ")}
+                            </td>
+                            <td className="px-5 py-3 text-right">
+                              <div className="flex justify-end gap-3">
+                                <button
+                                  onClick={() => {
+                                    setEditingUserId(u.id);
+                                    setNewUser(u);
+                                    setShowUserForm(true);
+                                  }}
+                                  className="text-slate-500 hover:text-slate-300 transition cursor-pointer"
+                                  title="Editar Usuário"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if(window.confirm(`Tem certeza que deseja excluir o usuário ${u.name}?`)) {
+                                      try {
+                                        await deleteDoc(doc(db, "users", u.id));
+                                      } catch(e) {
+                                        alert("Erro ao excluir usuário.");
+                                      }
+                                    }
+                                  }}
+                                  className="text-slate-500 hover:text-red-400 transition cursor-pointer"
+                                  title="Remover Usuário"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                </motion.div>
+              )}
             </AnimatePresence>
           )}
         </main>
@@ -1992,6 +2215,146 @@ export default function App() {
           <span>Workspace SDK: Siemens NX Open API v2212</span>
         </div>
       </footer>
+
+      {/* MODAL 0: CREATE USER (RBAC) */}
+      {showUserForm && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl max-w-lg w-full"
+          >
+            <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                <UserIcon className="w-4 h-4 text-blue-400" />
+                {editingUserId ? "EDITAR USUÁRIO" : "CRIAR NOVA CONTA"}
+              </h3>
+              <button
+                onClick={() => setShowUserForm(false)}
+                className="text-slate-400 hover:text-slate-200 font-mono text-xs cursor-pointer"
+              >
+                [FECHAR]
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (isSubmittingUser) return;
+              setIsSubmittingUser(true);
+              
+              // Fecha a janela instantaneamente (Otimista)
+              setShowUserForm(false);
+              
+              const userToSave = { ...newUser };
+              const id = editingUserId;
+              
+              setNewUser({ name: "", email: "", role: "Operador CNC", permissions: ["dashboard"] });
+              setEditingUserId(null);
+
+              // Salva em background
+              (async () => {
+                try {
+                  if (id) {
+                    await setDoc(doc(db, "users", id), userToSave);
+                  } else {
+                    await addDoc(collection(db, "users"), userToSave);
+                  }
+                } catch (error) {
+                  console.error("Erro ao salvar no Firebase:", error);
+                  alert("Atenção: O usuário não foi salvo na nuvem. Verifique se o Banco de Dados Firestore foi criado no console do Firebase!");
+                } finally {
+                  setIsSubmittingUser(false);
+                }
+              })();
+
+            }} className="p-6 space-y-4 text-xs">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-slate-400 mb-1">Nome Completo</label>
+                  <input
+                    type="text"
+                    value={newUser.name}
+                    onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1">E-mail de Acesso</label>
+                  <input
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1">Função (Role)</label>
+                  <select
+                    value={newUser.role}
+                    onChange={(e) => setNewUser({ ...newUser, role: e.target.value as any })}
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="Administrador">Administrador</option>
+                    <option value="Operador CNC">Operador CNC</option>
+                    <option value="Engenheiro">Engenheiro</option>
+                    <option value="Vendedor">Vendedor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-2">Módulos Permitidos (Acessos)</label>
+                  <div className="space-y-2 max-h-32 overflow-y-auto bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
+                    {[
+                      { id: "dashboard", label: "Dashboard (Monitoramento CNC)" },
+                      { id: "inventory", label: "Estoque do Cliente" },
+                      { id: "orders", label: "Fluxo de Usinagem" },
+                      { id: "ai-quote", label: "Orçamentos (Manual & Robô)" },
+                      { id: "siemens-nx", label: "Conexão Siemens NX" },
+                      { id: "finance", label: "Notas Fiscais (NF-e)" },
+                      { id: "settings", label: "Configurações" },
+                    ].map(mod => (
+                      <label key={mod.id} className="flex items-center gap-2 cursor-pointer group">
+                        <input
+                          type="checkbox"
+                          checked={newUser.permissions.includes(mod.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setNewUser({ ...newUser, permissions: [...newUser.permissions, mod.id] });
+                            } else {
+                              setNewUser({ ...newUser, permissions: newUser.permissions.filter(p => p !== mod.id) });
+                            }
+                          }}
+                          className="accent-blue-500"
+                        />
+                        <span className="text-slate-300 group-hover:text-white transition">{mod.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={isSubmittingUser}
+                  onClick={() => setShowUserForm(false)}
+                  className="px-4 py-2 rounded-lg border border-slate-800 text-slate-400 hover:text-slate-200 transition cursor-pointer disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingUser}
+                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingUser ? "Salvando..." : editingUserId ? "Salvar Alterações" : "Criar Conta"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
 
       {/* MODAL 1: RECEIVE MATERIAL FROM CLIENT */}
       {showMaterialForm && (

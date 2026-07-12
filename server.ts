@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -7,7 +8,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = 3001;
 
 app.use(express.json({ limit: "10mb" }));
 
@@ -130,11 +131,11 @@ let productionOrders = [
     history: [
       { stage: "Revisão de Projeto", completedAt: "2026-07-03 10:00", note: "Tolerâncias críticas de ± 0.005mm confirmadas." },
       { stage: "Preparação & Setup", completedAt: "2026-07-03 11:30", note: "Fixação em pinça mecânica de alta precisão programada." },
-      { stage: "Usinagem CNC", completedAt: "2026-07-03 16:45", note: "Peças usinadas com sucesso no Torno CNC Centur 30D." },
+      { stage: "Usinagem CNC", completedAt: "2026-07-03 16:45", note: "Peças usinadas com sucesso no Centro de Usinagem CNC HAAS VF-2." },
       { stage: "Controle de Qualidade", completedAt: null, note: "Em medição na máquina tridimensional de coordenadas (CMM)." }
     ],
     nfeStatus: "Pendente",
-    cncMachineId: "TORNO-CENTUR-30D",
+    cncMachineId: "CNC-HAAS-VF2",
     elapsedTime: 45,
   },
   {
@@ -166,7 +167,7 @@ let productionOrders = [
       { stage: "Revisão de Projeto", completedAt: null, note: "Aguardando importação final da simulação de colisão do NX Siemens." }
     ],
     nfeStatus: "Pendente",
-    cncMachineId: "MAZAK-INTEGREX-I100",
+    cncMachineId: "CNC-ROMI-D800",
     elapsedTime: 0,
   }
 ];
@@ -187,35 +188,20 @@ let simulations = {
     activeOP: "OP-2026-001",
     completedPercent: 62
   },
-  "TORNO-CENTUR-30D": {
-    machineId: "TORNO-CENTUR-30D",
-    machineName: "Romi Centur 30D (Torno CNC)",
+  "CNC-HAAS-VF2": {
+    machineId: "CNC-HAAS-VF2",
+    machineName: "Haas VF-2 (Centro de Usinagem 3 Eixos)",
     status: "Setup",
     spindleRPM: 0,
     feedRate: 0,
     coordinates: { x: 0.0, y: 0.0, z: 0.0 },
-    activeTool: "Ferramenta Desbaste Externo SS",
+    activeTool: "Fresa de Facear Ø50mm",
     activeGcode: "M05 (Parada de Spindle)",
     coolant: "Desligado",
     spindleLoad: 0,
     temperature: 24.8,
     activeOP: "OP-2026-002",
     completedPercent: 100
-  },
-  "MAZAK-INTEGREX-I100": {
-    machineId: "MAZAK-INTEGREX-I100",
-    machineName: "Mazak Integrex i-100 (5 Eixos Multipropósito)",
-    status: "Parada",
-    spindleRPM: 0,
-    feedRate: 0,
-    coordinates: { x: -350.0, y: 150.0, z: 200.0 },
-    activeTool: "Nenhuma",
-    activeGcode: "M30 (Fim de Programa)",
-    coolant: "Desligado",
-    spindleLoad: 0,
-    temperature: 22.1,
-    activeOP: null,
-    completedPercent: 0
   }
 };
 
@@ -319,7 +305,7 @@ app.post("/api/production-orders", (req, res) => {
       { stage: "Revisão de Projeto", completedAt: null, note: "Ordem iniciada a partir do recebimento de material do cliente." }
     ],
     nfeStatus: "Pendente",
-    cncMachineId: "MAZAK-INTEGREX-I100",
+    cncMachineId: "CNC-HAAS-VF2",
     elapsedTime: 0
   };
 
@@ -648,19 +634,24 @@ app.post("/api/quote-intelligent", async (req, res) => {
     
     // Simple mock budget logic
     const setupTimeHrs = 2.5;
+    const programmingTimeHrs = 1.5;
     const matString = typeof materialType === 'string' ? materialType.toLowerCase() : "";
-    const machiningTimeHrsPerPiece = matString.includes("titânio") ? 1.5 : matString.includes("inox") ? 1.0 : 0.6;
-    const qcTimeHrsPerPiece = (typeof tolerance === 'string' && tolerance.includes("0.005")) ? 0.5 : 0.25;
+    const cuttingTimeHrsPerPiece = matString.includes("titânio") ? 1.0 : matString.includes("inox") ? 0.7 : 0.4;
+    const swapTimeHrsPerPiece = 0.01; // ~36 seconds
+    const machiningTimeHrsPerPiece = cuttingTimeHrsPerPiece + swapTimeHrsPerPiece;
+    
+    const baseQcTime = (typeof tolerance === 'string' && tolerance.includes("0.005")) ? 0.5 : 0.2;
+    const qcTimePerAdditionalPiece = (typeof tolerance === 'string' && tolerance.includes("0.005")) ? 0.1 : 0.03;
     
     const machiningHourlyRate = 170;
     const laborHourlyRate = 90;
     
-    const totalMachiningHours = setupTimeHrs + (machiningTimeHrsPerPiece * Number(quantity));
-    const totalQCHours = qcTimeHrsPerPiece * Number(quantity);
+    const totalMachiningHours = (machiningTimeHrsPerPiece * Number(quantity));
+    const totalQCHours = baseQcTime + (qcTimePerAdditionalPiece * Math.max(0, Number(quantity) - 1));
     
     const machiningCost = totalMachiningHours * machiningHourlyRate;
     const qcCost = totalQCHours * laborHourlyRate;
-    const setupCost = setupTimeHrs * laborHourlyRate;
+    const setupCost = (setupTimeHrs + programmingTimeHrs) * laborHourlyRate;
     const materialHandlingCost = 150; // material is client provided, only storage/handling fee
     
     const baseTotal = machiningCost + qcCost + setupCost + materialHandlingCost;
@@ -697,13 +688,13 @@ app.post("/api/quote-intelligent", async (req, res) => {
         totalPrice: Number(finalPrice.toFixed(2))
       },
       robotReview: reviewWithImage,
-      recommendedMachine: materialType.toLowerCase().includes("titânio") ? "Mazak Integrex i-100 (5 Eixos)" : "Romi D800 (3 Eixos)",
+      recommendedMachine: materialType.toLowerCase().includes("titânio") ? "Haas VF-2 (3 Eixos)" : "Romi D800 (3 Eixos)",
       stagesBreakdown: [
         { stage: "Recebimento & Inspeção do Tarugo", hours: 0.5, desc: "Validação do certificado de corrida e dimensões brutas enviadas pelo cliente." },
         { stage: "Programação CAM (Siemens NX)", hours: 1.5, desc: "Geração de trajetórias de ferramentas livres de colisão." },
         { stage: "Setup de Máquina & CNC Ferramental", hours: setupTimeHrs, desc: "Fixação e zeramento de peça brutas no spindle/mesa." },
-        { stage: "Usinagem de Precisão CNC", hours: Number((machiningTimeHrsPerPiece * Number(quantity)).toFixed(1)), desc: `Frezamento/Torneamento CNC controlado com resfriamento contínuo.` },
-        { stage: "Inspeção Tridimensional (Metrologia)", hours: Number((qcTimeHrsPerPiece * Number(quantity)).toFixed(1)), desc: "Validação de tolerâncias críticas com micrômetro digital e braço de medição." }
+        { stage: "Usinagem de Precisão CNC", hours: Number(totalMachiningHours.toFixed(1)), desc: `Frezamento/Torneamento CNC controlado com resfriamento contínuo.` },
+        { stage: "Inspeção Tridimensional (Metrologia)", hours: Number(totalQCHours.toFixed(1)), desc: "Validação de tolerâncias críticas com micrômetro digital e braço de medição." }
       ],
       warnings: ["Tolerâncias abaixo de 0.010mm exigem ambiente de metrologia climatizado a 20°C.", "Garantir que os tarugos entregues tenham pelo menos 5mm extras de sobremetal para fixação mecânica."],
       similarQuotes: localSimilar
@@ -724,7 +715,11 @@ app.post("/api/quote-intelligent", async (req, res) => {
     })));
 
     const prompt = `Você é o Engenheiro Orçamentista Inteligente e Especialista de Processos Industriais CNC de uma empresa de usinagem de alta precisão.
-Seu objetivo é gerar uma proposta comercial detalhada, realista e ALTAMENTE COMPETITIVA frente aos concorrentes de mercado. Você deve calcular os tempos de ciclo de usinagem (corte) e setup com máxima eficiência, evitando horas infladas que deixariam o orçamento caro e fora da realidade do mercado de usinagem.
+Seu objetivo é gerar uma proposta comercial detalhada, realista e ALTAMENTE COMPETITIVA frente aos concorrentes de mercado. Você deve calcular os tempos de ciclo de usinagem (corte) e setup com máxima eficiência.
+MUITO IMPORTANTE (ECONOMIA DE ESCALA):
+1. Programação CAM e Setup/Zeramento de Máquina são custos FIXOS e cobrados apenas UMA VEZ, seja para 1 ou 30 peças. O valor de setup não se multiplica pela quantidade.
+2. Metrologia/Inspeção: a medição de dimensões simples (tamanhos, diâmetros, roscas com paquímetro) é rápida. O tempo por peça cai drasticamente em lotes maiores.
+3. A troca de peças na máquina é muito rápida (ex: menos de 30 segundos para peças pequenas), então o tempo de usinagem por peça em lotes reflete majoritariamente apenas o tempo de corte efetivo.
 A matéria-prima é fornecida pelo cliente, então o custo do material bruto deve ser R$ 0. Você cobrará apenas serviços de engenharia, programação CAM, setup de CNC, tempo de usinagem por hora e inspeção metrológica.
 
 ${image ? "Analise a imagem/desenho/esboço anexado para identificar o perfil de geometria física da peça, furos, ranhuras, chanfros e complexidade visual." : ""}
@@ -765,7 +760,7 @@ Seu output deve ser RIGOROSAMENTE um JSON válido em português contendo os segu
     "totalPrice": número (total calculado lógica de mercado: custos + margem + impostos + urgência - desconto)
   },
   "robotReview": string (texto explicativo detalhado de engenheiro, justificando as velocidades de corte, desafios do material fornecido pelo cliente e controle de tolerâncias exigidas. Se houver imagem/esboço, inclua uma descrição clara e identificação de qual geometria você detectou no desenho e como isso afetou o processo sugerido),
-  "recommendedMachine": string (ex: "Centro de Usinagem CNC Romi D800" ou "Torno CNC de Precisão Centur 30D" ou "Mazak Integrex i-100 5 eixos"),
+  "recommendedMachine": string (ex: "Centro de Usinagem CNC Romi D800" ou "Centro de Usinagem Haas VF-2"),
   "stagesBreakdown": [
     {
       "stage": string (nome da etapa do fluxo de usinagem),
@@ -850,6 +845,18 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+    
+    app.get("*", async (req, res, next) => {
+      try {
+        const url = req.originalUrl;
+        let template = fs.readFileSync(path.join(process.cwd(), "index.html"), "utf-8");
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ "Content-Type": "text/html" }).end(template);
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));

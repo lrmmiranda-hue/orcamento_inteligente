@@ -117,3 +117,11 @@ export interface AiQuoteResponse {
     matchReason: string;
   }[];
 }
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: "Administrador" | "Operador CNC" | "Engenheiro" | "Vendedor";
+  permissions: string[];
+}

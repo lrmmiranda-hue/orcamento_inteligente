@@ -57,6 +57,15 @@ export default function App() {
 
   // Settings & Users state
   const [users, setUsers] = useState<User[]>([]);
+  const [dbMachines, setDbMachines] = useState<CncMachine[]>([]);
+  
+  // Machine Management Modal State
+  const [showMachineForm, setShowMachineForm] = useState(false);
+  const [isSubmittingMachine, setIsSubmittingMachine] = useState(false);
+  const [newMachineData, setNewMachineData] = useState({
+    machineId: "",
+    machineName: "",
+  });
   
   // Login State
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -64,15 +73,28 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
-    const q = collection(db, "users");
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const qUsers = collection(db, "users");
+    const unsubscribeUsers = onSnapshot(qUsers, (snapshot) => {
       const loadedUsers: User[] = [];
       snapshot.forEach((docSnap) => {
         loadedUsers.push({ id: docSnap.id, ...docSnap.data() } as User);
       });
       setUsers(loadedUsers);
     });
-    return () => unsubscribe();
+    
+    const qMachines = collection(db, "machines");
+    const unsubscribeMachines = onSnapshot(qMachines, (snapshot) => {
+      const loadedMachines: CncMachine[] = [];
+      snapshot.forEach((docSnap) => {
+        loadedMachines.push({ id: docSnap.id, ...docSnap.data() } as any);
+      });
+      setDbMachines(loadedMachines);
+    });
+    
+    return () => {
+      unsubscribeUsers();
+      unsubscribeMachines();
+    };
   }, []);
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -989,7 +1011,7 @@ export default function App() {
                       <div>
                         <span className="text-[10px] text-slate-500 font-mono uppercase font-semibold">Máquinas Online</span>
                         <h4 className="text-2xl font-bold font-mono text-white">
-                          {(Object.values(machines) as CncMachine[]).filter(m => m.status === "Roda").length}/3
+                          {[...(Object.values(machines) as CncMachine[]), ...dbMachines.filter(dbM => !Object.values(machines).some((m: any) => m.machineId === dbM.machineId))].filter(m => m.status === "Roda").length} / {[...(Object.values(machines) as CncMachine[]), ...dbMachines.filter(dbM => !Object.values(machines).some((m: any) => m.machineId === dbM.machineId))].length}
                         </h4>
                       </div>
                     </div>
@@ -1017,7 +1039,7 @@ export default function App() {
                     </div>
 
                     <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {(Object.values(machines) as CncMachine[]).map((mach) => (
+                      {[...(Object.values(machines) as CncMachine[]), ...dbMachines.filter(dbM => !Object.values(machines).some((m: any) => m.machineId === dbM.machineId))].map((mach: any) => (
                         <div key={mach.machineId} className="bg-slate-950 border border-slate-800/80 rounded-lg p-4 flex flex-col justify-between hover:border-slate-700 transition">
                           <div>
                             <div className="flex justify-between items-start mb-3">
@@ -2267,6 +2289,64 @@ export default function App() {
                     </table>
                   </div>
 
+                  {/* CNC MACHINES MANAGEMENT */}
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-lg mt-8">
+                    <div className="bg-slate-950 px-5 py-3 border-b border-slate-800 flex justify-between items-center">
+                      <h3 className="text-xs font-bold font-mono text-slate-200 tracking-wider">MÁQUINAS CNC CADASTRADAS (NUVEM)</h3>
+                      <button
+                        onClick={() => {
+                          setNewMachineData({ machineId: `CNC-${Math.floor(Math.random()*10000)}`, machineName: "" });
+                          setShowMachineForm(true);
+                        }}
+                        className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[10px] transition cursor-pointer flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Adicionar Máquina
+                      </button>
+                    </div>
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-slate-950 text-slate-400 font-mono">
+                        <tr>
+                          <th className="px-5 py-3 border-b border-slate-800">ID / CÓDIGO</th>
+                          <th className="px-5 py-3 border-b border-slate-800">NOME DA MÁQUINA</th>
+                          <th className="px-5 py-3 border-b border-slate-800 text-right">AÇÕES</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/80">
+                        {dbMachines.map((m: any) => (
+                          <tr key={m.id} className="hover:bg-slate-800/50 transition">
+                            <td className="px-5 py-3 font-mono text-blue-400">{m.machineId}</td>
+                            <td className="px-5 py-3 font-semibold text-white">{m.machineName}</td>
+                            <td className="px-5 py-3 text-right">
+                              <button
+                                onClick={async () => {
+                                  if(window.confirm(`Tem certeza que deseja remover a máquina ${m.machineName}?`)) {
+                                    try {
+                                      await deleteDoc(doc(db, "machines", m.id));
+                                    } catch(e) {
+                                      alert("Erro ao excluir máquina.");
+                                    }
+                                  }
+                                }}
+                                className="text-slate-500 hover:text-red-400 transition cursor-pointer"
+                                title="Remover Máquina"
+                              >
+                                <Trash2 className="w-4 h-4 inline" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {dbMachines.length === 0 && (
+                          <tr>
+                            <td colSpan={3} className="px-5 py-6 text-center text-slate-500 font-mono italic">
+                              Nenhuma máquina cadastrada na nuvem ainda.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
                 </motion.div>
               )}
             </AnimatePresence>
@@ -2423,6 +2503,107 @@ export default function App() {
         </div>
       )}
 
+      {/* MODAL 1B: CREATE MACHINE */}
+      {showMachineForm && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl max-w-lg w-full"
+          >
+            <div className="bg-slate-950 px-6 py-4 border-b border-slate-800 flex justify-between items-center">
+              <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                <Settings className="w-4 h-4 text-indigo-400" />
+                CADASTRAR MÁQUINA CNC
+              </h3>
+              <button
+                onClick={() => setShowMachineForm(false)}
+                className="text-slate-400 hover:text-slate-200 font-mono text-xs cursor-pointer"
+              >
+                [FECHAR]
+              </button>
+            </div>
+
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (isSubmittingMachine) return;
+              setIsSubmittingMachine(true);
+              
+              setShowMachineForm(false);
+              
+              const machineToSave = {
+                machineId: newMachineData.machineId,
+                machineName: newMachineData.machineName,
+                status: "Parada",
+                spindleRPM: 0,
+                feedRate: 0,
+                coordinates: { x: 0, y: 0, z: 0 },
+                activeTool: "Nenhuma",
+                activeGcode: "",
+                coolant: "Desligado",
+                spindleLoad: 0,
+                temperature: 20,
+                activeOP: null,
+                completedPercent: 0
+              };
+
+              (async () => {
+                try {
+                  await addDoc(collection(db, "machines"), machineToSave);
+                } catch (error) {
+                  console.error("Erro ao salvar no Firebase:", error);
+                  alert("Erro ao cadastrar máquina na nuvem.");
+                } finally {
+                  setIsSubmittingMachine(false);
+                }
+              })();
+            }} className="p-6 space-y-4 text-xs">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-slate-400 mb-1">Código / ID da Máquina</label>
+                  <input
+                    type="text"
+                    value={newMachineData.machineId}
+                    onChange={(e) => setNewMachineData({ ...newMachineData, machineId: e.target.value })}
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500 font-mono"
+                    placeholder="Ex: CNC-ROMI-D800"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 mb-1">Nome Completo / Modelo</label>
+                  <input
+                    type="text"
+                    value={newMachineData.machineName}
+                    onChange={(e) => setNewMachineData({ ...newMachineData, machineName: e.target.value })}
+                    className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-500"
+                    placeholder="Ex: Romi D800 (3 Eixos)"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                <button
+                  type="button"
+                  disabled={isSubmittingMachine}
+                  onClick={() => setShowMachineForm(false)}
+                  className="px-4 py-2 rounded-lg border border-slate-800 text-slate-400 hover:text-slate-200 transition cursor-pointer disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingMachine}
+                  className="px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition shadow-md cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingMachine ? "Salvando..." : "Salvar Máquina"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
       {/* MODAL 1: RECEIVE MATERIAL FROM CLIENT */}
       {showMaterialForm && (
         <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4 z-50">

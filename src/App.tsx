@@ -57,6 +57,11 @@ export default function App() {
 
   // Settings & Users state
   const [users, setUsers] = useState<User[]>([]);
+  
+  // Login State
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginError, setLoginError] = useState("");
 
   useEffect(() => {
     const q = collection(db, "users");
@@ -429,6 +434,68 @@ export default function App() {
       default: return "bg-slate-500/10 text-slate-400 border-slate-500/20";
     }
   };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4 selection:bg-blue-600/30">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl relative overflow-hidden"
+        >
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-cyan-400"></div>
+          
+          <div className="flex flex-col items-center mb-8">
+            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-800 shadow-xl mb-4">
+              <img src={logoImg} alt="WCF Logo" className="w-full h-full object-cover object-center" />
+            </div>
+            <h1 className="text-2xl font-bold font-mono tracking-tight text-white">WCF <span className="text-blue-500">Usinagem</span></h1>
+            <p className="text-slate-400 text-xs font-mono mt-1">SISTEMA INTEGRADO DE GESTÃO</p>
+          </div>
+
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              setLoginError("");
+              const foundUser = users.find(u => u.email.toLowerCase() === loginEmail.toLowerCase());
+              if (foundUser) {
+                setCurrentUser(foundUser);
+              } else {
+                setLoginError("E-mail não encontrado no sistema. Verifique a digitação ou crie o usuário na aba Configurações.");
+              }
+            }} 
+            className="space-y-5"
+          >
+            <div>
+              <label className="block text-xs text-slate-400 font-mono mb-2">E-MAIL DE ACESSO</label>
+              <input 
+                type="email" 
+                value={loginEmail}
+                onChange={e => setLoginEmail(e.target.value)}
+                placeholder="seu.email@empresa.com"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition shadow-inner"
+                required
+              />
+            </div>
+            
+            {loginError && (
+              <p className="text-red-400 text-xs bg-red-950/30 p-3 rounded-lg border border-red-900/50">{loginError}</p>
+            )}
+
+            <button type="submit" className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold tracking-wider transition shadow-lg shadow-blue-900/20">
+              ACESSAR SISTEMA
+            </button>
+          </form>
+          
+          <div className="mt-8 pt-6 border-t border-slate-800 text-center">
+            <p className="text-[10px] text-slate-600 font-mono">
+              Os dados de acesso estão sincronizados com a nuvem (Firebase).
+            </p>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-blue-600/30">
@@ -1294,7 +1361,7 @@ export default function App() {
                     </h2>
                     <button 
                       onClick={() => { setActiveTab("dashboard"); setQuoteMode("select"); }}
-                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded font-semibold transition cursor-pointer"
+                      className="px-4 py-2 rounded bg-gradient-to-r from-indigo-600 to-blue-600 text-white font-semibold transition hover:from-indigo-500 hover:to-blue-500 shadow-md cursor-pointer"
                     >
                       Voltar ao Painel
                     </button>

@@ -202,6 +202,21 @@ let simulations = {
     temperature: 24.8,
     activeOP: "OP-2026-002",
     completedPercent: 100
+  },
+  "CNC-DOOSAN-DNM5700": {
+    machineId: "CNC-DOOSAN-DNM5700",
+    machineName: "Doosan DNM 5700 (Centro de Usinagem 3 Eixos)",
+    status: "Parada",
+    spindleRPM: 0,
+    feedRate: 0,
+    coordinates: { x: 10.0, y: 10.0, z: 150.0 },
+    activeTool: "Broca de Centro Ø4mm",
+    activeGcode: "G28 Z0",
+    coolant: "Desligado",
+    spindleLoad: 0,
+    temperature: 22.0,
+    activeOP: null,
+    completedPercent: 0
   }
 };
 

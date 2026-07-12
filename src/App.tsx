@@ -41,6 +41,7 @@ import { MaterialItem, ProductionOrder, CncMachine, Invoice, AiQuoteResponse, Us
 import SiemensNxSync from "./components/SiemensNxSync";
 import Sketchpad from "./components/Sketchpad";
 import logoImg from "./assets/logo3.jpg";
+import logologinImg from "./assets/logologin.png";
 import { collection, onSnapshot, addDoc, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db } from "./lib/firebase";
 
@@ -468,10 +469,9 @@ export default function App() {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-cyan-400"></div>
           
           <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 rounded-full overflow-hidden border-2 border-slate-800 shadow-xl mb-4">
-              <img src={logoImg} alt="WCF Logo" className="w-full h-full object-cover object-center" />
+            <div className="w-32 h-16 rounded overflow-hidden shadow-xl mb-4 bg-white/5 p-2 flex items-center justify-center">
+              <img src={logologinImg} alt="Login Logo" className="max-w-full max-h-full object-contain" />
             </div>
-            <h1 className="text-2xl font-bold font-mono tracking-tight text-white">WCF <span className="text-blue-500">Usinagem</span></h1>
             <p className="text-slate-400 text-xs font-mono mt-1">SISTEMA INTEGRADO DE GESTÃO</p>
           </div>
 
